@@ -1,4 +1,4 @@
-const API_BASE_URL = '${import.meta.env.VITE_API_URL}/api'
+const API_BASE_URL = `${import.meta.env.VITE_API_URL}/api`
 
 export const getToken = () => localStorage.getItem('cc_token')
 export const setToken = (token) => localStorage.setItem('cc_token', token)
