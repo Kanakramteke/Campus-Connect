@@ -1,27 +1,136 @@
-# Welcome Page — React + Tailwind (CDN demo)
+# CampusConnect 🎓
 
-This folder contains a polished welcome page built with React and Tailwind CSS using CDN builds so you can preview it immediately without a build step.
+CampusConnect is a full-stack student platform connecting college campuses across Nagpur (VNIT Nagpur, RCOEM, YCCE, GHRIET, IIIT Nagpur). It enables students to discover technical hackathons, cultural fests, campus clubs, and inter-college communities.
 
-Files included:
-- `index.html` — Loads React, ReactDOM, Babel and Tailwind (Play CDN). Mounts the React app.
-- `css/styles.css` — Minimal fallback styles (mostly unused; Tailwind provides main styling).
-- `js/app.jsx` — React app (Header, Hero, Features, Contact, Footer) using Tailwind utility classes.
+---
 
-How to view locally (PowerShell):
+## 📁 Project Structure
 
-```powershell
-# from the project root (where index.html lives)
-# if you have Python installed (works with Python 3.x):
-python -m http.server 8000; Start-Process "http://localhost:8000"
-
-# Or just open the file directly (double-click `index.html`).
+```
+Project/
+├── backend/                  # Node.js + Express.js REST API Service
+│   ├── prisma/               # Prisma Schema & Database Seeder (dev.db / PostgreSQL)
+│   ├── src/
+│   │   ├── config/           # Database & Environment Configuration
+│   │   ├── controllers/      # Express API Controllers
+│   │   ├── middleware/       # Auth (JWT), Role Authorization, Multer Uploads & Error Handler
+│   │   ├── routes/           # REST Route Definitions (/api/auth, /api/users, /api/events, etc.)
+│   │   ├── services/         # Prisma Database Operations & Business Logic
+│   │   ├── validators/       # Zod Validation Schemas
+│   │   ├── utils/            # API Response Helpers
+│   │   ├── app.js            # Express Application Setup
+│   │   └── server.js         # HTTP Server Listener (Port 5000)
+│   ├── uploads/              # Local Image Media Storage
+│   ├── tests/                # Jest + Supertest Integration Tests
+│   ├── .env                  # Environment Variables
+│   └── package.json          # Node Dependencies & Scripts
+│
+├── frontend/                 # React 18 + Vite UI
+│   ├── src/                  # Source Code
+│   │   ├── api/              # Centralized API Client Layer
+│   │   ├── components/       # Reusable Component Architecture
+│   │   ├── context/          # CampusContext State Management
+│   │   ├── pages/            # Page Views (Dashboard, Events, Clubs, Communities, Notifications, Profile, Settings, Creator)
+│   │   ├── App.jsx           # Main Router & Application Shell
+│   │   └── main.jsx          # React DOM Mount Entry Point
+│   ├── index.html            # HTML Shell
+│   └── package.json          # Frontend Dependencies
 ```
 
-Notes:
-- This demo uses the Tailwind Play CDN (https://cdn.tailwindcss.com) to apply Tailwind utilities at runtime. It's perfect for prototypes and demos. For production, convert to a proper build (Vite, Tailwind CLI) and use the official Tailwind build pipeline.
-- The theme toggle sets the `dark` class on the document root (Tailwind's class-based dark mode). Preference is stored in `localStorage`.
+---
 
-Next steps you might want:
-- Convert this to a Vite + React project with Tailwind installed (I can scaffold `package.json`, `vite.config.js`, and `tailwind.config.cjs`).
-- Add a logo SVG, favicon, and social meta tags.
-- Add animations (Framer Motion) or more interactive components.
+## 🛠️ Technology Stack
+
+- **Frontend**: React 18, Vite, Lucide Icons, Framer Motion, Vanilla CSS / Tailwind
+- **Backend**: Node.js, Express.js
+- **Database & ORM**: PostgreSQL / SQLite, Prisma ORM
+- **Authentication & Security**: JWT (JSON Web Tokens), bcryptjs, Helmet, CORS, dotenv
+- **Validation**: Zod
+- **File Uploads**: Multer
+- **Testing**: Jest, Supertest
+
+---
+
+## 🚀 Quick Start Instructions
+
+### Prerequisites
+- [Node.js](https://nodejs.org/) (v18 or higher)
+- npm (v9 or higher)
+
+---
+
+### 1. Backend Setup & Startup (Node.js + Express + Prisma)
+
+1. **Navigate to Backend Directory**:
+   ```bash
+   cd backend
+   ```
+
+2. **Install Dependencies**:
+   ```bash
+   npm install
+   ```
+
+3. **Initialize Prisma Database & Seed Nagpur Campus Data**:
+   ```bash
+   npx prisma generate
+   npx prisma db push
+   node prisma/seed.js
+   ```
+
+4. **Start Backend REST API Server (Port 5000)**:
+   ```bash
+   npm run dev
+   ```
+
+5. **Run Backend Test Suite**:
+   ```bash
+   npm test
+   ```
+
+---
+
+### 2. Frontend Setup & Startup (React + Vite)
+
+1. **Navigate to Frontend Directory**:
+   ```bash
+   cd frontend
+   ```
+
+2. **Install Dependencies**:
+   ```bash
+   npm install
+   ```
+
+3. **Start Development Server (Port 5173)**:
+   ```bash
+   npm run dev
+   ```
+
+4. **Build for Production**:
+   ```bash
+   npm run build
+   ```
+
+Open [http://localhost:5173](http://localhost:5173) in your browser.
+
+---
+
+## 🔑 Default Demo Accounts
+
+| Role | Email | Password |
+| :--- | :--- | :--- |
+| **Student** | `kanak.ramteke@vnit.ac.in` | `password123` |
+| **Event Organizer** | `aarav.sharma@vnit.ac.in` | `password123` |
+| **Club Head** | `ananya.d@rcoem.in` | `password123` |
+| **Community Admin** | `rohan.v@iiitn.ac.in` | `password123` |
+
+---
+
+## 🌟 Key Application Features
+
+- **Authentication & Persistence**: Secure registration and login with bcrypt hashing, JWT tokens, and instant profile hydration.
+- **Role-Based Creator System**: Creator workflow for Organizers, Club Heads, and Community Admins with Draft, Preview, and Publishing capability.
+- **Events Engine**: Technical & Cultural event discovery, registration, sandbox payment, registration passes, and bookmarks.
+- **Campus Clubs & Communities**: Inter-college student organizations with persistent memberships and active discussion feeds.
+- **Notifications Hub**: System, event, registration, and membership activity notifications with unread state tracking.
