@@ -1,10 +1,12 @@
-const prisma = require('../config/db')
+
+const { randomUUID } = require('crypto')
+const pool = require('../config/db')
 
 const formatEvent = (event) => {
   return {
     id: event.id,
     title: event.title,
-    category: event.category.toLowerCase(), // 'technical' or 'cultural'
+    category: event.category.toLowerCase(),
     type: event.category.toLowerCase(),
     tagline: event.tagline || '',
     description: event.description,
@@ -14,7 +16,7 @@ const formatEvent = (event) => {
     time: event.time,
     location: event.location,
     venue: event.venue,
-    registrationFee: event.registrationFee,
+    registrationFee: Number(event.registrationFee),
     isFree: event.isFree,
     seats: event.seats,
     seatsAvailable: event.seats,
@@ -31,87 +33,153 @@ const formatEvent = (event) => {
 }
 
 const getEvents = async (query = {}) => {
-  const where = {}
+  const conditions = []
+  const values = []
+
+  const addCondition = (condition, value) => {
+    values.push(value)
+    conditions.push(condition.replace('?', `$${values.length}`))
+  }
 
   if (query.category) {
-    where.category = query.category.toUpperCase()
+    addCondition('"category" = ?', query.category.toUpperCase())
   }
 
   if (query.type) {
-    where.category = query.type.toUpperCase()
+    addCondition('"category" = ?', query.type.toUpperCase())
   }
 
   if (query.college) {
-    where.college = { contains: query.college }
+    addCondition('"college" LIKE ?', `%${query.college}%`)
   }
 
   if (query.status) {
-    where.status = query.status.toUpperCase()
+    addCondition('"status" = ?', query.status.toUpperCase())
   } else {
-    where.status = 'PUBLISHED'
+    addCondition('"status" = ?', 'PUBLISHED')
   }
 
   if (query.search) {
-    where.OR = [
-      { title: { contains: query.search } },
-      { description: { contains: query.search } },
-      { college: { contains: query.search } }
-    ]
+    values.push(
+      `%${query.search}%`,
+      `%${query.search}%`,
+      `%${query.search}%`
+    )
+
+    const start = values.length - 2
+
+    conditions.push(
+      `(title LIKE $${start} OR description LIKE $${start + 1} OR college LIKE $${start + 2})`
+    )
   }
 
   if (query.fee === 'free') {
-    where.isFree = true
+    conditions.push('"isFree" = TRUE')
   } else if (query.fee === 'paid') {
-    where.isFree = false
+    conditions.push('"isFree" = FALSE')
   }
 
-  const events = await prisma.event.findMany({
-    where,
-    orderBy: { createdAt: 'desc' }
-  })
+  const sql = `
+    SELECT *
+    FROM "Event"
+    ${conditions.length ? `WHERE ${conditions.join(' AND ')}` : ''}
+    ORDER BY "createdAt" DESC
+  `
 
-  return events.map(formatEvent)
+  const result = await pool.query(sql, values)
+
+  return result.rows.map(formatEvent)
 }
 
 const getEventById = async (id) => {
-  const event = await prisma.event.findUnique({ where: { id } })
+  const result = await pool.query(
+    'SELECT * FROM "Event" WHERE id = $1',
+    [id]
+  )
+
+  const event = result.rows[0]
+
   if (!event) {
     const err = new Error('Event not found')
     err.statusCode = 404
     throw err
   }
+
   return formatEvent(event)
 }
 
 const createEvent = async (data, creatorId) => {
-  const isFree = data.registrationFee ? Number(data.registrationFee) === 0 : (data.isFree !== undefined ? data.isFree : true)
-  const newEvent = await prisma.event.create({
-    data: {
-      title: data.title,
-      category: (data.category || 'TECHNICAL').toUpperCase(),
-      tagline: data.tagline || '',
-      description: data.description,
-      image: data.image || data.banner || null,
-      date: data.date,
-      time: data.time,
-      location: data.location,
-      venue: data.venue,
-      registrationFee: Number(data.registrationFee || 0),
+  const eventId = randomUUID()
+  const registrationFee = Number(data.registrationFee || 0)
+
+  const isFree = data.registrationFee !== undefined
+    ? registrationFee === 0
+    : (data.isFree !== undefined ? data.isFree : true)
+
+  const result = await pool.query(
+    `INSERT INTO "Event" (
+      id,
+      title,
+      category,
+      tagline,
+      description,
+      image,
+      date,
+      time,
+      location,
+      venue,
+      "registrationFee",
+      "isFree",
+      seats,
+      eligibility,
+      "organizedBy",
+      college,
+      "creatorId",
+      status,
+      "whatToExpect",
+      "createdAt",
+      "updatedAt"
+    )
+    VALUES (
+      $1, $2, $3, $4, $5, $6, $7, $8, $9, $10,
+      $11, $12, $13, $14, $15, $16, $17, $18,
+      $19, NOW(), NOW()
+    )
+    RETURNING *`,
+    [
+      eventId,
+      data.title,
+      (data.category || 'TECHNICAL').toUpperCase(),
+      data.tagline || '',
+      data.description,
+      data.image || data.banner || null,
+      data.date,
+      data.time,
+      data.location,
+      data.venue,
+      registrationFee,
       isFree,
-      seats: Number(data.seats || 100),
-      eligibility: data.eligibility || 'All Students',
-      organizedBy: data.organizedBy || 'Campus Society',
-      college: data.college || data.organizingCollege || 'VNIT Nagpur',
+      Number(data.seats || 100),
+      data.eligibility || 'All Students',
+      data.organizedBy || 'Campus Society',
+      data.college || data.organizingCollege || 'VNIT Nagpur',
       creatorId,
-      status: (data.status || 'PUBLISHED').toUpperCase(),
-      whatToExpect: data.whatToExpect || ''
-    }
-  })
-  return formatEvent(newEvent)
+      (data.status || 'PUBLISHED').toUpperCase(),
+      data.whatToExpect || ''
+    ]
+  )
+
+  return formatEvent(result.rows[0])
 }
 
 const updateEvent = async (id, data, creatorId) => {
-  const event = await prisma.event.findUnique({ where: { id } })
+  const existingResult = await pool.query(
+    'SELECT * FROM "Event" WHERE id = $1',
+    [id]
+  )
+
+  const event = existingResult.rows[0]
+
   if (!event) {
     const err = new Error('Event not found')
     err.statusCode = 404
@@ -125,6 +193,7 @@ const updateEvent = async (id, data, creatorId) => {
   }
 
   const updateData = {}
+
   if (data.title) updateData.title = data.title
   if (data.category) updateData.category = data.category.toUpperCase()
   if (data.tagline !== undefined) updateData.tagline = data.tagline
@@ -134,23 +203,50 @@ const updateEvent = async (id, data, creatorId) => {
   if (data.time) updateData.time = data.time
   if (data.location) updateData.location = data.location
   if (data.venue) updateData.venue = data.venue
+
   if (data.registrationFee !== undefined) {
     updateData.registrationFee = Number(data.registrationFee)
     updateData.isFree = Number(data.registrationFee) === 0
   }
+
+  if (data.isFree !== undefined && data.registrationFee === undefined) {
+    updateData.isFree = data.isFree
+  }
+
   if (data.seats !== undefined) updateData.seats = Number(data.seats)
   if (data.eligibility !== undefined) updateData.eligibility = data.eligibility
   if (data.organizedBy) updateData.organizedBy = data.organizedBy
-  if (data.college || data.organizingCollege) updateData.college = data.college || data.organizingCollege
+
+  if (data.college || data.organizingCollege) {
+    updateData.college = data.college || data.organizingCollege
+  }
+
   if (data.status) updateData.status = data.status.toUpperCase()
   if (data.whatToExpect !== undefined) updateData.whatToExpect = data.whatToExpect
 
-  const updated = await prisma.event.update({
-    where: { id },
-    data: updateData
-  })
+  const fields = Object.keys(updateData)
 
-  return formatEvent(updated)
+  if (fields.length === 0) {
+    return formatEvent(event)
+  }
+
+  const values = fields.map(field => updateData[field])
+  const setClauses = fields.map(
+    (field, index) => `"${field}" = $${index + 1}`
+  )
+
+  values.push(id)
+
+  const sql = `
+    UPDATE "Event"
+    SET ${setClauses.join(', ')}, "updatedAt" = NOW()
+    WHERE id = $${values.length}
+    RETURNING *
+  `
+
+  const result = await pool.query(sql, values)
+
+  return formatEvent(result.rows[0])
 }
 
 const publishEvent = async (id, creatorId) => {
@@ -158,7 +254,13 @@ const publishEvent = async (id, creatorId) => {
 }
 
 const deleteEvent = async (id, creatorId) => {
-  const event = await prisma.event.findUnique({ where: { id } })
+  const result = await pool.query(
+    'SELECT * FROM "Event" WHERE id = $1',
+    [id]
+  )
+
+  const event = result.rows[0]
+
   if (!event) {
     const err = new Error('Event not found')
     err.statusCode = 404
@@ -171,34 +273,64 @@ const deleteEvent = async (id, creatorId) => {
     throw err
   }
 
-  await prisma.event.delete({ where: { id } })
+  await pool.query(
+    'DELETE FROM "Event" WHERE id = $1',
+    [id]
+  )
+
   return { message: 'Event deleted successfully' }
 }
 
 const toggleBookmark = async (userId, eventId) => {
-  const existing = await prisma.bookmark.findUnique({
-    where: { userId_eventId: { userId, eventId } }
-  })
+  const deleted = await pool.query(
+    `DELETE FROM "Bookmark"
+     WHERE "userId" = $1 AND "eventId" = $2
+     RETURNING id`,
+    [userId, eventId]
+  )
 
-  if (existing) {
-    await prisma.bookmark.delete({
-      where: { userId_eventId: { userId, eventId } }
-    })
-    return { bookmarked: false, message: 'Event removed from bookmarks' }
-  } else {
-    await prisma.bookmark.create({
-      data: { userId, eventId }
-    })
-    return { bookmarked: true, message: 'Event bookmarked' }
+  if (deleted.rows.length > 0) {
+    return {
+      bookmarked: false,
+      message: 'Event removed from bookmarks'
+    }
+  }
+
+  const bookmarkId = randomUUID()
+
+  const inserted = await pool.query(
+    `INSERT INTO "Bookmark" (
+      id,
+      "userId",
+      "eventId",
+      "createdAt"
+    )
+    VALUES ($1, $2, $3, NOW())
+    ON CONFLICT ("userId", "eventId") DO NOTHING
+    RETURNING id`,
+    [bookmarkId, userId, eventId]
+  )
+
+  if (inserted.rows.length === 0) {
+    return {
+      bookmarked: true,
+      message: 'Event already bookmarked'
+    }
+  }
+
+  return {
+    bookmarked: true,
+    message: 'Event bookmarked'
   }
 }
 
 const getUserBookmarkIds = async (userId) => {
-  const bookmarks = await prisma.bookmark.findMany({
-    where: { userId },
-    select: { eventId: true }
-  })
-  return bookmarks.map(b => b.eventId)
+  const result = await pool.query(
+    'SELECT "eventId" FROM "Bookmark" WHERE "userId" = $1',
+    [userId]
+  )
+
+  return result.rows.map(bookmark => bookmark.eventId)
 }
 
 module.exports = {

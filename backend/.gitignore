@@ -1,0 +1,31 @@
+@'
+# Environment files and secrets
+.env
+.env.*
+!.env.example
+!.env.test.example
+
+# Dependencies
+node_modules/
+
+# Test output
+coverage/
+
+# Logs
+*.log
+npm-debug.log*
+
+# Generated uploads
+uploads/*
+!uploads/.gitkeep
+
+# Operating system files
+.DS_Store
+Thumbs.db
+'@ | Set-Content -Path .\.gitignore
+
+Write-Host "`n========== CREATED GITIGNORE =========="
+Get-Content .\.gitignore
+
+Write-Host "`n========== CHECK ENV FILE IGNORE =========="
+git check-ignore .env .env.test

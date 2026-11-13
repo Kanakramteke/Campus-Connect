@@ -1,29 +1,58 @@
-const prisma = require('../config/db')
 
-const createNotification = async (userId, data) => {
-  const notification = await prisma.notification.create({
-    data: {
+const { randomUUID } = require('crypto')
+const pool = require('../config/db')
+
+const createNotification = async (userId, data, db = pool) => {
+  const id = randomUUID()
+
+  const result = await db.query(
+    `INSERT INTO "Notification" (
+      id,
+      "userId",
+      category,
+      type,
+      title,
+      message,
+      "isRead",
+      "relatedEntityType",
+      "relatedEntityId",
+      "actionRoute",
+      "actionParams",
+      "actionLabel",
+      "createdAt"
+    )
+    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, NOW())
+    RETURNING *`,
+    [
+      id,
       userId,
-      category: data.category || 'events',
-      type: data.type || 'system',
-      title: data.title,
-      message: data.message,
-      isRead: false,
-      relatedEntityType: data.relatedEntityType || null,
-      relatedEntityId: data.relatedEntityId || null,
-      actionRoute: data.actionRoute || null,
-      actionParams: data.actionParams ? JSON.stringify(data.actionParams) : null,
-      actionLabel: data.actionLabel || 'View Details'
-    }
-  })
+      data.category || 'events',
+      data.type || 'system',
+      data.title,
+      data.message,
+      false,
+      data.relatedEntityType || null,
+      data.relatedEntityId || null,
+      data.actionRoute || null,
+      data.actionParams ? JSON.stringify(data.actionParams) : null,
+      data.actionLabel || 'View Details'
+    ]
+  )
 
-  return formatNotification(notification)
+  return formatNotification(result.rows[0])
 }
 
 const formatNotification = (notif) => {
   let actionParams = null
+
   if (notif.actionParams) {
-    try { actionParams = JSON.parse(notif.actionParams) } catch (e) {}
+    try {
+      actionParams = typeof notif.actionParams === 'string'
+        ? JSON.parse(notif.actionParams)
+        : notif.actionParams
+    } catch (err) {
+      actionParams = null
+    }
   }
 
   return {
@@ -40,43 +69,68 @@ const formatNotification = (notif) => {
     actionParams,
     actionLabel: notif.actionLabel,
     createdAt: notif.createdAt,
-    timestamp: notif.createdAt ? new Date(notif.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : 'Recent'
+    timestamp: notif.createdAt
+      ? new Date(notif.createdAt).toLocaleDateString('en-US', {
+          month: 'short',
+          day: 'numeric'
+        })
+      : 'Recent'
   }
 }
 
 const getUserNotifications = async (userId) => {
-  const notifications = await prisma.notification.findMany({
-    where: { userId },
-    orderBy: { createdAt: 'desc' }
-  })
-  return notifications.map(formatNotification)
+  const result = await pool.query(
+    `SELECT *
+     FROM "Notification"
+     WHERE "userId" = $1
+     ORDER BY "createdAt" DESC`,
+    [userId]
+  )
+
+  return result.rows.map(formatNotification)
 }
 
 const markAsRead = async (id, userId, isRead = true) => {
-  await prisma.notification.updateMany({
-    where: { id, userId },
-    data: { isRead }
-  })
-  return { message: `Notification marked as ${isRead ? 'read' : 'unread'}` }
+  await pool.query(
+    `UPDATE "Notification"
+     SET "isRead" = $1
+     WHERE id = $2 AND "userId" = $3`,
+    [isRead, id, userId]
+  )
+
+  return {
+    message: `Notification marked as ${isRead ? 'read' : 'unread'}`
+  }
 }
 
 const markAllAsRead = async (userId) => {
-  await prisma.notification.updateMany({
-    where: { userId, isRead: false },
-    data: { isRead: true }
-  })
-  return { message: 'All notifications marked as read' }
+  await pool.query(
+    `UPDATE "Notification"
+     SET "isRead" = TRUE
+     WHERE "userId" = $1 AND "isRead" = FALSE`,
+    [userId]
+  )
+
+  return {
+    message: 'All notifications marked as read'
+  }
 }
 
 const deleteNotification = async (id, userId) => {
-  await prisma.notification.deleteMany({
-    where: { id, userId }
-  })
-  return { message: 'Notification deleted' }
+  await pool.query(
+    `DELETE FROM "Notification"
+     WHERE id = $1 AND "userId" = $2`,
+    [id, userId]
+  )
+
+  return {
+    message: 'Notification deleted'
+  }
 }
 
 module.exports = {
   createNotification,
+  formatNotification,
   getUserNotifications,
   markAsRead,
   markAllAsRead,
